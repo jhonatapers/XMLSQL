@@ -26,31 +26,33 @@ namespace XMLSQL
 
                 IdChain root = IdChain.CreateRoot();
                 idChains.Add(root);
-
-                StreamReader(reader, ref columns, ref idChains, ref root, aham);
+                int callStack = 0;
+                StreamReader(reader, ref columns, ref idChains, ref root, aham, ref callStack);
                 Console.WriteLine(aham);
             }
         }
 
-        private void StreamReader(XmlReader reader, ref ConcurrentBag<DataColumn> columns, ref ConcurrentBag<IdChain> idChains, ref IdChain lastIdChain, List<Row> rowContainer) //
+        private void StreamReader(XmlReader reader, ref ConcurrentBag<DataColumn> columns, ref ConcurrentBag<IdChain> idChains, ref IdChain lastIdChain, List<Row> rowContainer, ref int callStack)
         {
+            callStack++;
+
             while (!reader.EOF)
             {
                 SkipDontMatterNodes(reader, ref columns);
 
                 if (reader.Depth > lastIdChain.Depth)
                 {
-                    StreamReaderDeeper(reader, ref columns, ref idChains, ref lastIdChain, rowContainer);
+                    StreamReaderDeeper(reader, ref columns, ref idChains, ref lastIdChain, rowContainer, ref callStack);
                     if (reader.Depth != lastIdChain.Depth)
                         break;
                     continue;
                 }
                 else
-                    StreamReaderSameDepth(reader, ref columns, ref idChains, ref lastIdChain, rowContainer);
+                    StreamReaderSameDepth(reader, ref columns, ref idChains, ref lastIdChain, rowContainer, ref callStack);
             }
         }
 
-        private void StreamReaderDeeper(XmlReader reader, ref ConcurrentBag<DataColumn> columns, ref ConcurrentBag<IdChain> idChains, ref IdChain lastIdChain, List<Row> rowContainer)
+        private void StreamReaderDeeper(XmlReader reader, ref ConcurrentBag<DataColumn> columns, ref ConcurrentBag<IdChain> idChains, ref IdChain lastIdChain, List<Row> rowContainer, ref int callStack)
         {
             int idChainDepth = lastIdChain.Depth;
             string idChainOwnerName = lastIdChain.OwnerName;
@@ -74,10 +76,10 @@ namespace XMLSQL
             }
 
 
-            StreamReader(reader, ref columns, ref idChains, ref lastIdChain, rowContainer);
+            //StreamReader(reader, ref columns, ref idChains, ref lastIdChain, rowContainer, ref callStack);
         }
 
-        private void StreamReaderSameDepth(XmlReader reader, ref ConcurrentBag<DataColumn> columns, ref ConcurrentBag<IdChain> idChains, ref IdChain lastIdChain, List<Row> rowContainer)
+        private void StreamReaderSameDepth(XmlReader reader, ref ConcurrentBag<DataColumn> columns, ref ConcurrentBag<IdChain> idChains, ref IdChain lastIdChain, List<Row> rowContainer, ref int callStack)
         {
             IdChain actualIdChain = lastIdChain;
 
@@ -101,7 +103,10 @@ namespace XMLSQL
                 SkipDontMatterNodes(reader, ref columns);
 
                 if (reader.Depth > actualIdChain.Depth)
-                    StreamReader(reader, ref columns, ref idChains, ref actualIdChain, rowContainer);
+                {
+                    StreamReaderDeeper(reader, ref columns, ref idChains, ref actualIdChain, rowContainer, ref callStack);
+                    //break;
+                }
                 else
                 {
                     rowContainer
