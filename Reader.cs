@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Xml;
 
 namespace XMLSQL
@@ -21,80 +22,97 @@ namespace XMLSQL
 
                 List<Row> aham = new List<Row>();
 
-                IdChain root = IdChain.CreateRoot();
+                ConcurrentBag<IdChain> idChains = new ConcurrentBag<IdChain>();
 
-                StreamReader(reader, ref columns, ref root, aham);
+                IdChain root = IdChain.CreateRoot();
+                idChains.Add(root);
+
+                StreamReader(reader, ref columns, ref idChains, ref root, aham);
                 Console.WriteLine(aham);
             }
         }
 
-        private void StreamReader(XmlReader reader, ref ConcurrentBag<DataColumn> columns, ref IdChain idChain, List<Row> rowContainer) //
+        private void StreamReader(XmlReader reader, ref ConcurrentBag<DataColumn> columns, ref ConcurrentBag<IdChain> idChains, ref IdChain lastIdChain, List<Row> rowContainer) //
         {
             while (!reader.EOF)
             {
                 SkipDontMatterNodes(reader, ref columns);
 
-                //if (reader.Depth == idChain.Depth && idChain.OwnerName.Equals(reader.Name))
-                //    idChain.PlusId();
-
-                if (reader.Depth > idChain.Depth)
+                if (reader.Depth > lastIdChain.Depth)
                 {
-                    StreamReaderDeeper(reader, ref columns, ref idChain, rowContainer);
-                    if (reader.Depth != idChain.Depth)
+                    StreamReaderDeeper(reader, ref columns, ref idChains, ref lastIdChain, rowContainer);
+                    if (reader.Depth != lastIdChain.Depth)
                         break;
                     continue;
                 }
                 else
-                    StreamReaderSameDepth(reader, ref columns, ref idChain, rowContainer);
-
+                    StreamReaderSameDepth(reader, ref columns, ref idChains, ref lastIdChain, rowContainer);
             }
         }
 
-        private void StreamReaderDeeper(XmlReader reader, ref ConcurrentBag<DataColumn> columns, ref IdChain idChain, List<Row> rowContainer)
+        private void StreamReaderDeeper(XmlReader reader, ref ConcurrentBag<DataColumn> columns, ref ConcurrentBag<IdChain> idChains, ref IdChain lastIdChain, List<Row> rowContainer)
         {
-            int idChainDepth = idChain.Depth;
-            string idChainOwnerName = idChain.OwnerName;
+            int idChainDepth = lastIdChain.Depth;
+            string idChainOwnerName = lastIdChain.OwnerName;
 
             foreach (Row row in rowContainer.Where(r => r.Depth == idChainDepth && r.OwnerName.Equals(idChainOwnerName)).ToList())
             {
-                PopulateRowSelfId(row, columns, idChain);
+                PopulateRowSelfId(row, columns, lastIdChain);
                 row.Complete();
             }
 
             PushCompletedRows(rowContainer, ref columns);
 
-            IdChain newIdChainnew = new IdChain(reader.Name, idChain, reader.Depth);
+            if (idChains.Count(idc => reader.Name.Equals(idc.OwnerName)) == 0)
+            {
+                lastIdChain = new IdChain(reader.Name, lastIdChain, reader.Depth);
+                idChains.Add(lastIdChain);
+            }
+            else
+            {
+                lastIdChain = idChains.First(idc => idc.OwnerName.Equals(reader.Name));
+            }
 
-            StreamReader(reader, ref columns, ref newIdChainnew, rowContainer);
+
+            StreamReader(reader, ref columns, ref idChains, ref lastIdChain, rowContainer);
         }
 
-        private void StreamReaderSameDepth(XmlReader reader, ref ConcurrentBag<DataColumn> columns, ref IdChain idChain, List<Row> rowContainer)
+        private void StreamReaderSameDepth(XmlReader reader, ref ConcurrentBag<DataColumn> columns, ref ConcurrentBag<IdChain> idChains, ref IdChain lastIdChain, List<Row> rowContainer)
         {
-            HashSet<IdChain> sameDepthIdChains = new HashSet<IdChain>();
-            IdChain actualIdChain = idChain;// new IdChain(reader.Name, idChain.Parent, reader.Depth);
-            sameDepthIdChains.Add(idChain);
+            IdChain actualIdChain = lastIdChain;
 
             while (!reader.EOF)
             {
                 SkipDontMatterNodes(reader, ref columns);
 
-                if (sameDepthIdChains.Count(idc => idc.Depth == reader.Depth && reader.Name.Equals(idc.OwnerName)) == 0)
+                if (reader.Name.Equals("Op"))
+                    Console.WriteLine("Aham");
+
+                //if (idChains.Count(idc => idc.Depth == reader.Depth && reader.Name.Equals(idc.OwnerName)) == 0)
+                if (idChains.Count(idc => reader.Name.Equals(idc.OwnerName)) == 0)
                 {
-                    actualIdChain = new IdChain(reader.Name, idChain.Parent, reader.Depth);
-                    sameDepthIdChains.Add(actualIdChain);
+                    actualIdChain = new IdChain(reader.Name, lastIdChain.Parent, reader.Depth);
+                    idChains.Add(actualIdChain);
                 }
                 else
-                    actualIdChain = sameDepthIdChains.First(idc => idc.Depth == reader.Depth && reader.Name.Equals(idc.OwnerName));
+                    actualIdChain = idChains.First(idc => reader.Name.Equals(idc.OwnerName));
 
-                if (reader.Depth == actualIdChain.Depth && actualIdChain.OwnerName.Equals(reader.Name))
-                    actualIdChain.PlusId();
+                if (reader.Name.Equals("Op"))
+                    Console.WriteLine("Aham");
+
+                if (actualIdChain.OwnerName.Equals(reader.Name))
+                {
+                    idChains.Where(idc => reader.Name.Equals(idc.OwnerName)).ToList().ForEach(idc => idc.PlusId());
+                    //actualIdChain.PlusId();
+                }
+
 
                 rowContainer.Add(ExtractAttributes(reader, columns, actualIdChain));
 
                 SkipDontMatterNodes(reader, ref columns);
 
                 if (reader.Depth > actualIdChain.Depth)
-                    StreamReader(reader, ref columns, ref actualIdChain, rowContainer);
+                    StreamReader(reader, ref columns, ref idChains, ref actualIdChain, rowContainer);
                 else
                 {
                     rowContainer
@@ -109,10 +127,9 @@ namespace XMLSQL
                 {
                     while (actualIdChain.Depth > reader.Depth)
                         actualIdChain = actualIdChain.Parent;
-                    idChain = actualIdChain;
+                    lastIdChain = actualIdChain;
                     break;
                 }
-
             }
         }
 
@@ -201,6 +218,21 @@ namespace XMLSQL
             Console.WriteLine(row.OwnerName);
             Console.WriteLine(row.Depth);
             Console.WriteLine(row.Attributes);
+            //
+
+
+            using (StreamWriter sw = new StreamWriter(@"C:\Users\jhonata.peres\Desktop\leitor XML\saida\saida.txt", true))
+            {
+                System.Text.StringBuilder sb = new StringBuilder();
+                for (int i = 0; i < row.Attributes.Length; i++)
+                {
+                    sb.Append(String.Format("[{0}={1}]", i, row.Attributes[i]));
+                }
+
+                sw.WriteLine(String.Format("Owner={0}  Depth={1}  ID={2}  values[{3}]", row.OwnerName, row.Depth, row.Id, sb.ToString()));
+                sw.Close();
+            }
+
             return true;
         }
 
