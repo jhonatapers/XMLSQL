@@ -61,7 +61,7 @@ namespace XMLSQL
                 row.Complete();
             }
 
-            PushCompletedRows(rowContainer, ref columns);
+            PushCompletedRows(rowContainer);
 
             if (idChains.Count(idc => reader.Name.Equals(idc.OwnerName)) == 0)
             {
@@ -85,10 +85,6 @@ namespace XMLSQL
             {
                 SkipDontMatterNodes(reader, ref columns);
 
-                if (reader.Name.Equals("Op"))
-                    Console.WriteLine("Aham");
-
-                //if (idChains.Count(idc => idc.Depth == reader.Depth && reader.Name.Equals(idc.OwnerName)) == 0)
                 if (idChains.Count(idc => reader.Name.Equals(idc.OwnerName)) == 0)
                 {
                     actualIdChain = new IdChain(reader.Name, lastIdChain.Parent, reader.Depth);
@@ -97,14 +93,7 @@ namespace XMLSQL
                 else
                     actualIdChain = idChains.First(idc => reader.Name.Equals(idc.OwnerName));
 
-                if (reader.Name.Equals("Op"))
-                    Console.WriteLine("Aham");
-
-                if (actualIdChain.OwnerName.Equals(reader.Name))
-                {
-                    idChains.Where(idc => reader.Name.Equals(idc.OwnerName)).ToList().ForEach(idc => idc.PlusId());
-                    //actualIdChain.PlusId();
-                }
+                idChains.Where(idc => reader.Name.Equals(idc.OwnerName)).ToList().ForEach(idc => idc.PlusId());
 
 
                 rowContainer.Add(ExtractAttributes(reader, columns, actualIdChain));
@@ -120,7 +109,7 @@ namespace XMLSQL
                         .ToList()
                         .ForEach(row => row.Complete());
 
-                    PushCompletedRows(rowContainer, ref columns);
+                    PushCompletedRows(rowContainer);
                 }
 
                 if (reader.Depth < actualIdChain.Depth)
@@ -196,12 +185,12 @@ namespace XMLSQL
             throw new InvalidDataException();
         }
 
-        private void PushCompletedRows(List<Row> rows, ref ConcurrentBag<DataColumn> columns)
+        private void PushCompletedRows(List<Row> rows)
         {
 
             foreach (Row r in rows.Where(row => row.Completed).ToList())
             {
-                PushRow(r, ref columns);
+                PushRow(r);
                 rows.Remove(r);
             }
 
@@ -209,7 +198,7 @@ namespace XMLSQL
             //rows.RemoveAll(row => row.Completed);
         }
 
-        private bool PushRow(Row row, ref ConcurrentBag<DataColumn> columns)
+        private bool PushRow(Row row)
         {
             if (row is null)
                 return false;
@@ -218,18 +207,23 @@ namespace XMLSQL
             Console.WriteLine(row.OwnerName);
             Console.WriteLine(row.Depth);
             Console.WriteLine(row.Attributes);
-            //
 
 
             using (StreamWriter sw = new StreamWriter(@"C:\Users\jhonata.peres\Desktop\leitor XML\saida\saida.txt", true))
             {
                 System.Text.StringBuilder sb = new StringBuilder();
-                for (int i = 0; i < row.Attributes.Length; i++)
+                //for (int i = 0; i < row.Attributes.Length; i++)
+                //{
+                //    //sb.Append(String.Format("[{0}={1}]", i, row.Attributes[i]));
+                //}
+
+                for (int i = 0; i < row.Depth; i++)
                 {
-                    sb.Append(String.Format("[{0}={1}]", i, row.Attributes[i]));
+                    sb.Append("   ");
                 }
 
-                sw.WriteLine(String.Format("Owner={0}  Depth={1}  ID={2}  values[{3}]", row.OwnerName, row.Depth, row.Id, sb.ToString()));
+
+                sw.WriteLine(String.Format("{0}{1} ID={3} Depth={2}  ", sb.ToString(), row.OwnerName, row.Depth, row.Id));
                 sw.Close();
             }
 
