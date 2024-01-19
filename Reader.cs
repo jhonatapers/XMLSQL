@@ -11,6 +11,8 @@ namespace XMLSQL
 {
     internal class Reader
     {
+        StreamWriter sw;// = new StreamWriter(@"C:\Users\jhonata.peres\Desktop\leitor XML\saida\saida.txt", true);
+
         internal void StreamReader(string xmlPath, string xsdPath)
         {
             using (DataSet ds = new DataSet())
@@ -27,8 +29,10 @@ namespace XMLSQL
                 IdChain root = IdChain.CreateRoot();
                 idChains.Add(root);
                 int callStack = 0;
+                sw = new StreamWriter(@"C:\Users\jhonata.peres\Desktop\leitor XML\saida\saida.txt", true);
                 StreamReader(reader, ref columns, ref idChains, ref root, aham, ref callStack);
                 Console.WriteLine(aham);
+                sw.Close();
             }
         }
 
@@ -213,24 +217,30 @@ namespace XMLSQL
             Console.WriteLine(row.Depth);
             Console.WriteLine(row.Attributes);
 
-
-            using (StreamWriter sw = new StreamWriter(@"C:\Users\jhonata.peres\Desktop\leitor XML\saida\saida.txt", true))
+            System.Text.StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < row.Depth; i++)
             {
-                System.Text.StringBuilder sb = new StringBuilder();
-                //for (int i = 0; i < row.Attributes.Length; i++)
-                //{
-                //    //sb.Append(String.Format("[{0}={1}]", i, row.Attributes[i]));
-                //}
-
-                for (int i = 0; i < row.Depth; i++)
-                {
-                    sb.Append("   ");
-                }
-
-
-                sw.WriteLine(String.Format("{0}{1} ID={3} Depth={2}  ", sb.ToString(), row.OwnerName, row.Depth, row.Id));
-                sw.Close();
+                sb.Append("   ");
             }
+            sw.WriteLine(String.Format("{0}{1} ID={3} Depth={2}  ", sb.ToString(), row.OwnerName, row.Depth, row.Id));
+
+            //using (StreamWriter sw = new StreamWriter(@"C:\Users\jhonata.peres\Desktop\leitor XML\saida\saida.txt", true))
+            //{
+            //    System.Text.StringBuilder sb = new StringBuilder();
+            //    //for (int i = 0; i < row.Attributes.Length; i++)
+            //    //{
+            //    //    //sb.Append(String.Format("[{0}={1}]", i, row.Attributes[i]));
+            //    //}
+
+            //    for (int i = 0; i < row.Depth; i++)
+            //    {
+            //        sb.Append("   ");
+            //    }
+
+
+
+            //    sw.Close();
+            //}
 
             return true;
         }
