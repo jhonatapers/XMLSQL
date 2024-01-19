@@ -18,13 +18,16 @@ namespace XMLSQL
             {
                 ds.ReadXmlSchema(xsdStream);
                 ConcurrentBag<DataColumn> columns = ExtractColumns(ds);
-                StreamReader(reader, ref columns, IdChain.CreateRoot(), new ConcurrentStack<Row>()); //
+
+                List<Row> aham = new List<Row>();
+
+                StreamReader(reader, ref columns, IdChain.CreateRoot(), aham);
+                Console.WriteLine(aham);
             }
         }
 
-        private void StreamReader(XmlReader reader, ref ConcurrentBag<DataColumn> columns, IdChain idChain, ConcurrentStack<Row> rowContainer) //
+        private void StreamReader(XmlReader reader, ref ConcurrentBag<DataColumn> columns, IdChain idChain, List<Row> rowContainer) //
         {
-
             while (!reader.EOF)
             {
                 SkipDontMatterNodes(reader, ref columns);
@@ -34,38 +37,45 @@ namespace XMLSQL
 
                 if (reader.Depth > idChain.Depth)
                 {
-                    Row row;
-
-                    if (rowContainer.TryPop(out row))
-                    {
-                        PopulateRowSelfId(row, columns, idChain);
-                        PushRow(row);
-                    }
-
-                    StreamReader(reader, ref columns, new IdChain(reader.Name, idChain, reader.Depth), rowContainer);
+                    StreamReaderDeeper(reader, ref columns, idChain, rowContainer);
                     if (reader.Depth != idChain.Depth)
                         break;
                     continue;
                 }
                 else
                 {
-                    StreamReaderSameDepth(reader, ref columns, idChain.Parent, rowContainer);
+
+
+                    StreamReaderSameDepth(reader, ref columns, idChain, rowContainer);
                 }
             }
         }
 
-        private void StreamReaderSameDepth(XmlReader reader, ref ConcurrentBag<DataColumn> columns, IdChain parentIdChain, ConcurrentStack<Row> rowContainer)
+        private void StreamReaderDeeper(XmlReader reader, ref ConcurrentBag<DataColumn> columns, IdChain idChain, List<Row> rowContainer)
+        {
+            foreach (Row row in rowContainer.Where(r => r.Depth == idChain.Depth && r.OwnerName.Equals(idChain.OwnerName)).ToList())
+            {
+                PopulateRowSelfId(row, columns, idChain);
+                row.Complete();
+            }
+
+            PushCompletedRows(rowContainer, ref columns);
+
+            StreamReader(reader, ref columns, new IdChain(reader.Name, idChain, reader.Depth), rowContainer);
+        }
+
+        private void StreamReaderSameDepth(XmlReader reader, ref ConcurrentBag<DataColumn> columns, IdChain idChain, List<Row> rowContainer)
         {
             HashSet<IdChain> sameDepthIdChains = new HashSet<IdChain>();
+            IdChain actualIdChain = new IdChain(reader.Name, idChain.Parent, reader.Depth);
 
             while (!reader.EOF)
             {
                 SkipDontMatterNodes(reader, ref columns);
 
-                IdChain actualIdChain;
                 if (sameDepthIdChains.Count(idc => idc.Depth == reader.Depth && reader.Name.Equals(idc.OwnerName)) == 0)
                 {
-                    actualIdChain = new IdChain(reader.Name, parentIdChain, reader.Depth);
+                    actualIdChain = new IdChain(reader.Name, idChain.Parent, reader.Depth);
                     sameDepthIdChains.Add(actualIdChain);
                 }
                 else
@@ -74,15 +84,31 @@ namespace XMLSQL
                 if (reader.Depth == actualIdChain.Depth && actualIdChain.OwnerName.Equals(reader.Name))
                     actualIdChain.PlusId();
 
-                rowContainer.Push(ExtractAttributes(reader, columns, actualIdChain));
+                rowContainer.Add(ExtractAttributes(reader, columns, actualIdChain));
 
-                if (reader.Depth != actualIdChain.Depth)
+                SkipDontMatterNodes(reader, ref columns);
+
+                if (reader.Depth > actualIdChain.Depth)
+                    StreamReader(reader, ref columns, actualIdChain, rowContainer);
+                else
                 {
-                    Row row;
-                    while (rowContainer.TryPop(out row))
-                        PushRow(row);
-                    break;
+                    rowContainer
+                        .Where(row => reader.Depth <= row.Depth)
+                        .ToList()
+                        .ForEach(row => row.Complete());
+
+                    PushCompletedRows(rowContainer, ref columns);
                 }
+
+                if (reader.Depth < actualIdChain.Depth)
+                {
+                    do
+                    {
+                        actualIdChain = actualIdChain.Parent;
+                    } while (actualIdChain.Depth > reader.Depth);
+                    idChain = actualIdChain;
+                }
+                break;
             }
         }
 
@@ -112,7 +138,6 @@ namespace XMLSQL
 
             reader.Read();
             return new Row(idChain.Id, idChain.Depth, idChain.OwnerName, attributes);
-            //return new Row(iDChain.Id(ownerName), iDChain.Depth, ownerName, attributes);
         }
 
         private bool SkipNode(XmlNodeType nodeType)
@@ -150,13 +175,27 @@ namespace XMLSQL
             throw new InvalidDataException();
         }
 
-        private bool PushRow(Row row)
+        private void PushCompletedRows(List<Row> rows, ref ConcurrentBag<DataColumn> columns)
+        {
+
+            foreach (Row r in rows.Where(row => row.Completed).ToList())
+            {
+                PushRow(r, ref columns);
+                rows.Remove(r);
+            }
+
+            //rows.Where(row => row.Completed).ToList().ForEach(row => PushRow(row, ref columns));
+            //rows.RemoveAll(row => row.Completed);
+        }
+
+        private bool PushRow(Row row, ref ConcurrentBag<DataColumn> columns)
         {
             if (row is null)
                 return false;
 
 
             Console.WriteLine(row.OwnerName);
+            Console.WriteLine(row.Depth);
             Console.WriteLine(row.Attributes);
             return true;
         }
@@ -198,6 +237,13 @@ namespace XMLSQL
 
         internal class Row
         {
+            private bool completed;
+
+            internal bool Completed
+            {
+                get { return completed; }
+            }
+
             private readonly int id;
 
             internal int Id
@@ -237,6 +283,11 @@ namespace XMLSQL
             internal void SetAttribute(int index, object value)
             {
                 this.attributes[index] = value;
+            }
+
+            internal void Complete()
+            {
+                this.completed = true;
             }
 
         }
@@ -296,8 +347,6 @@ namespace XMLSQL
                 this.ownerName = ownerName;
                 this.parent = parent;
                 this.depth = depth;
-                //this.containerIds = new Dictionary<string, int>();
-                //this.containerIds.Add(ownerName, 0);
             }
 
             private IdChain()
@@ -305,26 +354,12 @@ namespace XMLSQL
                 this.root = true;
                 this.ownerName = "root";
                 this.depth = -1;
-                //this.containerIds = new Dictionary<string, int>();
-                //this.containerIds.Add("root", -1);
             }
 
             internal void PlusId()
             {
                 this.id++;
-                //if (this.containerIds.ContainsKey(ownerName))
-                //    this.containerIds[ownerName]++;
-                //else
-                //    this.containerIds.Add(ownerName, 1);
             }
-
-            //internal int Id(string ownerName)
-            //{
-            //    if (this.containerIds.ContainsKey(ownerName))
-            //        return this.containerIds[ownerName];
-
-            //    throw new ArgumentException();
-            //}
 
             internal static IdChain CreateRoot()
             {
@@ -332,8 +367,6 @@ namespace XMLSQL
             }
 
         }
-
-
 
     }
 
