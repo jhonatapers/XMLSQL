@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Data;
 using System.IO;
@@ -214,41 +213,6 @@ namespace f2.service
             if (!rowObservers.Contains(observer))
                 rowObservers.Add(observer);
             return new Unsubscriber<Row>(rowObservers, observer);
-        }
-
-        private class IdChainContainer
-        {
-            Dictionary<int, Dictionary<string, IdChain>> container;
-
-            internal IdChainContainer()
-            {
-                this.container = new Dictionary<int, Dictionary<string, IdChain>>();
-            }
-
-            internal IdChain IdChain(int depth, string ownerName)
-            {
-                if (container.ContainsKey(depth))
-                    if (container[depth].ContainsKey(ownerName))
-                        return container[depth][ownerName];
-
-                throw new ArgumentException();
-            }
-
-            internal void AddIdChain(int depth, string ownerName, IdChain idChain)
-            {
-                if (container.ContainsKey(depth))
-                    if (container[depth].ContainsKey(ownerName))
-                        throw new ConstraintException();
-                    else
-                        container[depth].Add(ownerName, idChain);
-                else
-                {
-                    Dictionary<string, IdChain> aux = new Dictionary<string, IdChain>();
-                    aux.Add(ownerName, idChain);
-                    container.Add(depth, aux);
-                }
-            }
-
         }
 
         private class IdChain
