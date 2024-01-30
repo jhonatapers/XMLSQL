@@ -69,15 +69,12 @@ namespace f2.service
                 processObservable.SetStep(lineInfo.LineNumber, 1);
 
                 if (reader.Depth > lastIdChain.Depth)
-                {
                     StreamReaderDeeper(reader, ref columns, ref idChains, ref lastIdChain, rowContainer);
-                    if (reader.Depth != lastIdChain.Depth)
-                        break;
-                    continue;
-                }
                 else
                     StreamReaderSameDepth(reader, ref columns, ref idChains, ref lastIdChain, rowContainer);
             }
+
+            processObservable.SetStep(lineInfo.LineNumber, 1);
 
             reader.Close();
         }
@@ -97,6 +94,8 @@ namespace f2.service
 
             if (!idChains.ContainsKey(reader.Name))
                 idChains.Add(reader.Name, new IdChain(reader.Name, lastIdChain, reader.Depth));
+            else
+                idChains[reader.Name].Parent = lastIdChain;
 
             lastIdChain = idChains[reader.Name];
         }
@@ -107,15 +106,20 @@ namespace f2.service
 
             while (!reader.EOF)
             {
-
                 SkipDontMatterNodes(reader, ref columns);
 
+                if (reader.Name.Equals("Agreg"))
+                    Console.WriteLine("aham");
+
                 if (!idChains.ContainsKey(reader.Name))
-                    idChains.Add(reader.Name, new IdChain(reader.Name, lastIdChain.Parent, reader.Depth));
+                    idChains.Add(reader.Name, new IdChain(reader.Name, actualIdChain.Parent, reader.Depth));
 
                 idChains[reader.Name].PlusId();
 
                 actualIdChain = idChains[reader.Name];
+
+                if (actualIdChain.OwnerName.Equals("Agreg"))
+                    Console.WriteLine("aham");
 
                 rowContainer.Add(ExtractAttributes(reader, columns[reader.Name], actualIdChain));
 
@@ -290,7 +294,7 @@ namespace f2.service
                 get { return depth; }
             }
 
-            private readonly IdChain parent;
+            private IdChain parent;
 
             internal IdChain Parent
             {
@@ -298,6 +302,10 @@ namespace f2.service
                 {
                     if (root) return this;
                     return parent;
+                }
+                set
+                {
+                    this.parent = value;
                 }
             }
 
