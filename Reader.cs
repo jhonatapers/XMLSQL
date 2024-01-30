@@ -108,18 +108,12 @@ namespace f2.service
             {
                 SkipDontMatterNodes(reader, ref columns);
 
-                if (reader.Name.Equals("Agreg"))
-                    Console.WriteLine("aham");
-
                 if (!idChains.ContainsKey(reader.Name))
                     idChains.Add(reader.Name, new IdChain(reader.Name, actualIdChain.Parent, reader.Depth));
 
                 idChains[reader.Name].PlusId();
 
                 actualIdChain = idChains[reader.Name];
-
-                if (actualIdChain.OwnerName.Equals("Agreg"))
-                    Console.WriteLine("aham");
 
                 rowContainer.Add(ExtractAttributes(reader, columns[reader.Name], actualIdChain));
 
